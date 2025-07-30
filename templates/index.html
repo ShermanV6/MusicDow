@@ -67,9 +67,10 @@
           <div class="bg-gray-800 p-4 rounded-2xl shadow-lg hover:shadow-2xl transition">
             <img src="${e.thumbnail}" alt="${e.title}" class="w-full h-40 object-cover rounded-lg mb-4">
             <h2 class="text-lg font-semibold mb-1 truncate">${e.title}</h2>
+            <p class="text-sm text-green-400 mb-2 truncate">📺 ${e.channel}</p>
             <p class="text-xs text-gray-400 mb-2">Duración: ${e.duration ?? '?'} s</p>
 
-            <div class="audio-player mb-4" data-index="${idx}">
+            <div class="audio-player mb-4" data-index="${idx}" data-video-id="${e.id}">
               <div class="play-btn" title="Play/Pause">
                 <svg viewBox="0 0 24 24" fill="currentColor" class="text-white">
                   <polygon class="icon-play" points="5,3 19,12 5,21"></polygon>
@@ -85,7 +86,7 @@
               <div class="time">0:00</div>
             </div>
 
-            <audio class="hidden" src="${e.audio_url}" preload="metadata"></audio>
+            <audio class="hidden" preload="none"></audio>
 
             <div class="flex space-x-2">
               <a href="/download/${e.id}" class="flex-1 text-center py-2 rounded-full bg-green-600 hover:bg-green-500 font-bold text-sm transition">FLAC</a>
@@ -103,9 +104,27 @@
           const progressContainer = container.querySelector('.progress-container');
           const progressBar = container.querySelector('.progress');
           const timeLabel = container.querySelector('.time');
+          const videoId = container.dataset.videoId;
 
-          playBtn.addEventListener('click', () => {
+          playBtn.addEventListener('click', async () => {
             if (audio.paused) {
+              // Si no tiene URL de audio, obtenerla primero
+              if (!audio.src) {
+                try {
+                  const response = await fetch(`/api/get-audio-url/${videoId}`);
+                  const data = await response.json();
+                  if (data.audio_url) {
+                    audio.src = data.audio_url;
+                  } else {
+                    console.error('No se pudo obtener URL de audio');
+                    return;
+                  }
+                } catch (error) {
+                  console.error('Error obteniendo URL de audio:', error);
+                  return;
+                }
+              }
+              
               audio.play();
               playIcon.style.display = 'none';
               pauseIcon.style.display = 'block';

@@ -21,7 +21,21 @@ def get_ffmpeg_location():
 # Crear directorio de descargas si no existe
 os.makedirs('downloads', exist_ok=True)
 
-YDL_OPTS_SEARCH = {'quiet': True, 'skip_download': True}
+# Configuración optimizada para búsquedas rápidas
+YDL_OPTS_FAST_SEARCH = {
+    'quiet': True,
+    'skip_download': True,
+    'extract_flat': False,        # Cambiado a False para obtener thumbnails
+    'socket_timeout': 15,         # Timeout más agresivo
+    'retries': 1,                 # Solo 1 reintento en lugar de 3
+    'no_warnings': True,          # Sin warnings para mejor rendimiento
+    'playlist_items': '1-8',      # Limitar explícitamente a 8 resultados
+    'lazy_playlist': True,        # No cargar toda la playlist de una vez
+    'writeinfojson': False,       # No escribir archivos JSON
+    'writedescription': False,    # No escribir descripciones
+    'writesubtitles': False,      # No escribir subtítulos
+    'writeautomaticsub': False,   # No escribir subtítulos automáticos
+}
 
 # Configuración FLAC optimizada
 YDL_OPTS_DOWNLOAD = {
@@ -60,26 +74,44 @@ def index():
 @app.route('/api/search')
 def api_search():
     query = request.args.get('query', '')
-    max_results = 4
+    max_results = 8
     results = []
 
     try:
-        with YoutubeDL({'quiet': True, 'skip_download': True, 'format': 'bestaudio', 'socket_timeout': 30}) as ydl:
+        # Usar configuración optimizada para búsquedas rápidas
+        with YoutubeDL(YDL_OPTS_FAST_SEARCH) as ydl:
             info = ydl.extract_info(f"ytsearch{max_results}:{query}", download=False)
             entries = info.get('entries', [])
+            
+            # Procesar cada entrada de forma optimizada
             for e in entries:
+                # Obtener información esencial incluyendo thumbnails
                 results.append({
-                    'id': e['id'],
-                    'title': e['title'],
+                    'id': e.get('id', ''),
+                    'title': e.get('title', 'Título no disponible'),
                     'duration': e.get('duration'),
-                    'thumbnail': e.get('thumbnail'),
-                    'audio_url': e['url']
+                    'thumbnail': e.get('thumbnail', ''),  # Mantenemos las imágenes
+                    'audio_url': '',  # Lo cargaremos bajo demanda para acelerar búsqueda
+                    'channel': e.get('uploader', 'Canal desconocido')
                 })
+                
     except Exception as e:
         print(f"Error en búsqueda: {e}")
         return jsonify({'error': 'Error en la búsqueda'})
 
     return jsonify(results)
+
+@app.route('/api/get-audio-url/<video_id>')
+def get_audio_url(video_id):
+    """Obtener URL de audio para un video específico (usado para reproducción)"""
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        with YoutubeDL({'quiet': True, 'skip_download': True, 'format': 'bestaudio', 'socket_timeout': 15}) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return jsonify({'audio_url': info.get('url', '')})
+    except Exception as e:
+        print(f"Error obteniendo URL de audio: {e}")
+        return jsonify({'error': 'Error obteniendo URL de audio'}), 500
 
 @app.route('/download/<video_id>')
 def download(video_id):
